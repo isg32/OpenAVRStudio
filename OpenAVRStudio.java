@@ -13,6 +13,10 @@ import java.util.regex.*;
 
 public class OpenAVRStudio extends JFrame {
 
+    // --- DEVELOPER INFO (EDIT THIS) ---
+    private static final String DEV_NAME = "isg32";
+    private static final String DEV_GITHUB = "https://github.com/isg32";
+
     // --- CONFIG & STATE ---
     private File currentFile = null;
     private boolean isRunning = false;
@@ -44,7 +48,7 @@ public class OpenAVRStudio extends JFrame {
     private UndoManager undoManager;
 
     public OpenAVRStudio() {
-        super("OpenAVR Studio");
+        super("OpenAVR Studio"); // Clean Title
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setSize(1250, 850);
         setLayout(new BorderLayout());
@@ -181,6 +185,8 @@ public class OpenAVRStudio extends JFrame {
 
     private void setupMenuBar() {
         JMenuBar mb = new JMenuBar();
+        
+        // 1. FILE MENU
         JMenu f = new JMenu("File");
         
         JMenuItem openItem = new JMenuItem("Open...");
@@ -204,7 +210,14 @@ public class OpenAVRStudio extends JFrame {
         f.addSeparator();
         f.add(exitItem);
         
+        // 2. HELP MENU (NEW)
+        JMenu h = new JMenu("Help");
+        JMenuItem aboutItem = new JMenuItem("About Developer");
+        aboutItem.addActionListener(e -> showAboutDialog());
+        h.add(aboutItem);
+        
         mb.add(f);
+        mb.add(h);
         setJMenuBar(mb);
     }
 
@@ -229,6 +242,18 @@ public class OpenAVRStudio extends JFrame {
         tb.add(btnRun);
         
         add(tb, BorderLayout.NORTH);
+    }
+
+    private void showAboutDialog() {
+        String msg = "<html><body style='width: 250px; text-align: center; font-family: sans-serif;'>" +
+                     "<h2 style='color: #2c3e50;'>OpenAVR Studio</h2>" +
+                     "<p><b>Version 6.6</b></p>" +
+                     "<hr>" +
+                     "<p>Developed by:<br><b style='font-size: 14px; color: #e67e22;'>" + DEV_NAME + "</b></p>" +
+                     "<p>GitHub:<br><span style='color: #3498db;'>" + DEV_GITHUB + "</span></p>" +
+                     "<br></body></html>";
+                     
+        JOptionPane.showMessageDialog(this, msg, "About Developer", JOptionPane.INFORMATION_MESSAGE);
     }
 
     private void setupEditorKeyBindings() {
@@ -495,7 +520,6 @@ public class OpenAVRStudio extends JFrame {
             for(int i=0; i<32; i++) {
                 int val = registers[i];
                 String bin = String.format("%8s", Integer.toBinaryString(val)).replace(' ', '0');
-                // HEX FORMAT UPDATE: 0xYY
                 String hex = String.format("0x%02X", val);
                 String dec = String.valueOf(val);
 
