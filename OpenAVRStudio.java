@@ -44,7 +44,7 @@ public class OpenAVRStudio extends JFrame {
     private UndoManager undoManager;
 
     public OpenAVRStudio() {
-        super("OpenAVR Studio - v6.4 (Hex Format Fix)");
+        super("OpenAVR Studio");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setSize(1250, 850);
         setLayout(new BorderLayout());
@@ -117,15 +117,13 @@ public class OpenAVRStudio extends JFrame {
         String[] regCols = {"Reg", "Val (Bin)", "Hex", "Dec"};
         registerModel = new DefaultTableModel(regCols, 0);
         for(int i=0; i<32; i++) {
-            // INITIALIZATION FIX: Start with 0x00
             registerModel.addRow(new Object[]{"R"+i, "00000000", "0x00", "0"});
         }
         
         registerTable = new JTable(registerModel);
-        // Column Widths
         registerTable.getColumnModel().getColumn(0).setPreferredWidth(35);
         registerTable.getColumnModel().getColumn(1).setPreferredWidth(75);
-        registerTable.getColumnModel().getColumn(2).setPreferredWidth(45); // Slightly wider for 0x
+        registerTable.getColumnModel().getColumn(2).setPreferredWidth(45);
         registerTable.getColumnModel().getColumn(3).setPreferredWidth(35);
         
         topSim.add(new JScrollPane(registerTable));
