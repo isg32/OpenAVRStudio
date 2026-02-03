@@ -27,6 +27,20 @@ It acts as a powerful frontend for the standard GNU AVR toolchain (`avr-gcc`, `a
 * **Integrated Flashing:** dedicated GUI tab for `avrdude` to detect chips and flash firmware.
 * **Device Selection:** Toolbar support for ATmega32, ATmega328P, and ATtiny85.
 
+### ☕ Install As An Application
+
+```bash
+chmod +x install.sh
+./install.sh
+```
+
+> Uninstall:
+
+```bash
+chmod +x uninstall.sh
+./uninstall.sh
+```
+
 ---
 
 ## 🛠️ Prerequisites
