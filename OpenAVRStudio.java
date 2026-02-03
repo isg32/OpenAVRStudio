@@ -15,14 +15,11 @@ import java.util.List;
 public class OpenAVRStudio extends JFrame {
 
     // --- CONFIG & STATE ---
-    private File currentFile = null;
     private boolean isRunning = false;
-    private boolean isPaused = false;
     private Thread simThread;
-    private Set<Integer> breakpoints = new HashSet<>(); // Line numbers
 
     // --- GUI COMPONENTS ---
-    private JTextPane codeEditor; // Replaced JTextArea for Colors
+    private JTextPane codeEditor; 
     private DefaultStyledDocument doc;
     private JTextArea consoleOutput;
     
@@ -31,7 +28,7 @@ public class OpenAVRStudio extends JFrame {
     private DefaultTableModel registerModel;
     private JTable memoryTable;
     private DefaultTableModel memoryModel;
-    private JLabel pcLabel, spLabel, cycleLabel;
+    private JLabel pcLabel, cycleLabel;
     
     // I/O Bit Visualizer
     private JPanel ioPanel;
@@ -40,13 +37,12 @@ public class OpenAVRStudio extends JFrame {
     // Toolbar
     private JComboBox<String> deviceCombo;
     private JComboBox<String> freqCombo;
-    private JButton btnRun, btnStep, btnPause, btnStop;
-    private JLabel statusLabel;
+    private JButton btnRun; // Single button now
 
     public OpenAVRStudio() {
-        super("OpenAVR Studio (Microchip Alt) - v6.0 Ultimate");
+        super("OpenAVR Studio - Simple Executor");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setSize(1400, 900);
+        setSize(1200, 800);
         setLayout(new BorderLayout());
 
         setupMenuBar();
@@ -54,7 +50,7 @@ public class OpenAVRStudio extends JFrame {
 
         // --- MAIN LAYOUT ---
         JSplitPane mainSplit = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT);
-        mainSplit.setResizeWeight(0.5); // 50/50 split
+        mainSplit.setResizeWeight(0.5); 
 
         // 1. LEFT: CODE EDITOR
         JPanel editorPanel = new JPanel(new BorderLayout());
@@ -72,14 +68,13 @@ public class OpenAVRStudio extends JFrame {
             public void changedUpdate(DocumentEvent e) {}
         });
 
-        // Line Numbers (Gutter)
+        // Line Numbers
         JTextArea lines = new JTextArea("1");
         lines.setBackground(new Color(50, 50, 50));
         lines.setForeground(Color.GRAY);
         lines.setEditable(false);
         lines.setFont(new Font("Monospaced", Font.PLAIN, 14));
         
-        // Scroll Pane
         JScrollPane editorScroll = new JScrollPane(codeEditor);
         editorScroll.setRowHeaderView(lines);
         codeEditor.getDocument().addDocumentListener(new DocumentListener(){
@@ -99,26 +94,21 @@ public class OpenAVRStudio extends JFrame {
         
         editorPanel.add(editorScroll, BorderLayout.CENTER);
         
-        // Set Default Code
+        // Default Code
         try { doc.insertString(0, getStarterCode(), null); } catch(Exception e){}
         
-        // 2. RIGHT: DEBUGGER & MEMORY
-        JTabbedPane rightTabs = new JTabbedPane();
+        // 2. RIGHT: SIMULATOR & MEMORY
+        JPanel rightPanel = new JPanel(new BorderLayout());
         
-        // TAB 1: SIMULATOR
-        JPanel simPanel = new JPanel(new BorderLayout());
-        
-        // Top: Registers & Flags
+        // Top: Registers
         JPanel topSim = new JPanel(new GridLayout(1, 2));
-        
-        // Registers
-        String[] regCols = {"Reg", "Val (Hex)", "Val (Dec)"};
+        String[] regCols = {"Reg", "Hex", "Dec"};
         registerModel = new DefaultTableModel(regCols, 0);
         for(int i=0; i<32; i++) registerModel.addRow(new Object[]{"R"+i, "00", "0"});
         registerTable = new JTable(registerModel);
         topSim.add(new JScrollPane(registerTable));
         
-        // I/O Visuals (Ports)
+        // I/O Visuals
         ioPanel = new JPanel();
         ioPanel.setLayout(new BoxLayout(ioPanel, BoxLayout.Y_AXIS));
         addPortVisualizer("PORTA");
@@ -127,55 +117,35 @@ public class OpenAVRStudio extends JFrame {
         addPortVisualizer("PORTD");
         topSim.add(new JScrollPane(ioPanel));
         
-        simPanel.add(topSim, BorderLayout.NORTH);
+        rightPanel.add(topSim, BorderLayout.NORTH);
         
-        // Center: Memory Map (SRAM)
+        // Center: Memory Map
         String[] memCols = {"Addr", "00", "01", "02", "03", "04", "05", "06", "07"};
         memoryModel = new DefaultTableModel(memCols, 0);
-        // Add fake memory rows (0x0000 to 0x0060)
         for(int i=0; i<16; i++) {
             memoryModel.addRow(new Object[]{String.format("0x%04X", i*8), "00", "00", "00", "00", "00", "00", "00", "00"});
         }
         memoryTable = new JTable(memoryModel);
-        JPanel memPanel = new JPanel(new BorderLayout());
-        memPanel.setBorder(BorderFactory.createTitledBorder("SRAM / IO Memory Inspector"));
-        memPanel.add(new JScrollPane(memoryTable));
-        simPanel.add(memPanel, BorderLayout.CENTER);
+        rightPanel.add(new JScrollPane(memoryTable), BorderLayout.CENTER);
 
         // Bottom: Console
         consoleOutput = new JTextArea();
-        consoleOutput.setRows(6);
+        consoleOutput.setRows(8);
         consoleOutput.setBackground(Color.BLACK);
         consoleOutput.setForeground(Color.GREEN);
         consoleOutput.setFont(new Font("Monospaced", Font.PLAIN, 12));
-        simPanel.add(new JScrollPane(consoleOutput), BorderLayout.SOUTH);
-        
-        rightTabs.addTab("Simulator / Debugger", simPanel);
-        
-        // TAB 2: PROGRAMMER (AVRDUDE GUI)
-        JPanel programmerPanel = new JPanel(new GridBagLayout());
-        JButton btnDetect = new JButton("Detect Chip");
-        JButton btnFlash = new JButton("Write Flash (.hex)");
-        JButton btnFuses = new JButton("Read Fuses");
-        programmerPanel.add(btnDetect);
-        programmerPanel.add(btnFlash);
-        programmerPanel.add(btnFuses);
-        rightTabs.addTab("Device Programming", programmerPanel);
+        rightPanel.add(new JScrollPane(consoleOutput), BorderLayout.SOUTH);
 
         mainSplit.setLeftComponent(editorPanel);
-        mainSplit.setRightComponent(rightTabs);
+        mainSplit.setRightComponent(rightPanel);
         add(mainSplit, BorderLayout.CENTER);
 
         // Status Bar
         JPanel bottomBar = new JPanel(new BorderLayout());
-        statusLabel = new JLabel(" Ready");
-        bottomBar.add(statusLabel, BorderLayout.WEST);
-        
         JPanel counters = new JPanel(new FlowLayout(FlowLayout.RIGHT));
         pcLabel = new JLabel("PC: 0x0000 ");
-        spLabel = new JLabel("SP: 0x0000 ");
         cycleLabel = new JLabel("Cycles: 0 ");
-        counters.add(pcLabel); counters.add(spLabel); counters.add(cycleLabel);
+        counters.add(pcLabel); counters.add(cycleLabel);
         bottomBar.add(counters, BorderLayout.EAST);
         
         add(bottomBar, BorderLayout.SOUTH);
@@ -183,26 +153,15 @@ public class OpenAVRStudio extends JFrame {
         setVisible(true);
     }
 
-    // --- SETUP HELPERS ---
+    // --- SETUP ---
 
     private void setupMenuBar() {
         JMenuBar mb = new JMenuBar();
         JMenu f = new JMenu("File");
-        f.add(new JMenuItem("Open Project..."));
+        f.add(new JMenuItem("Open..."));
         f.add(new JMenuItem("Save"));
         f.add(new JMenuItem("Exit"));
         mb.add(f);
-        
-        JMenu b = new JMenu("Build");
-        b.add(new JMenuItem("Build Solution (F7)"));
-        b.add(new JMenuItem("Clean Solution"));
-        mb.add(b);
-        
-        JMenu d = new JMenu("Debug");
-        d.add(new JMenuItem("Start Debugging (F5)"));
-        d.add(new JMenuItem("Step Into (F11)"));
-        mb.add(d);
-        
         setJMenuBar(mb);
     }
 
@@ -210,25 +169,15 @@ public class OpenAVRStudio extends JFrame {
         JToolBar tb = new JToolBar();
         tb.setFloatable(false);
         
-        deviceCombo = new JComboBox<>(new String[]{"ATmega32", "ATmega328P", "ATtiny85"});
-        freqCombo = new JComboBox<>(new String[]{"16 MHz", "8 MHz", "1 MHz"});
+        deviceCombo = new JComboBox<>(new String[]{"ATmega32", "ATmega328P"});
+        freqCombo = new JComboBox<>(new String[]{"16 MHz", "8 MHz"});
         
-        btnRun = new JButton("▶ Run");
-        btnRun.setForeground(new Color(0, 150, 0));
-        btnRun.addActionListener(e -> startBuildAndRun());
-        
-        btnPause = new JButton("⏸ Pause");
-        btnPause.setEnabled(false);
-        btnPause.addActionListener(e -> isPaused = !isPaused);
-        
-        btnStep = new JButton("⤵ Step");
-        btnStep.setEnabled(false);
-        btnStep.addActionListener(e -> { isPaused = true; stepSimulation(); });
-        
-        btnStop = new JButton("⏹ Stop");
-        btnStop.setForeground(Color.RED);
-        btnStop.setEnabled(false);
-        btnStop.addActionListener(e -> stopSimulation());
+        // THE SINGLE RUN BUTTON
+        btnRun = new JButton("▶ RUN & EXECUTE");
+        btnRun.setBackground(new Color(0, 120, 60));
+        btnRun.setForeground(Color.WHITE);
+        btnRun.setFont(new Font("SansSerif", Font.BOLD, 12));
+        btnRun.addActionListener(e -> toggleRun());
 
         tb.add(new JLabel(" Device: "));
         tb.add(deviceCombo);
@@ -236,9 +185,6 @@ public class OpenAVRStudio extends JFrame {
         tb.add(freqCombo);
         tb.addSeparator();
         tb.add(btnRun);
-        tb.add(btnPause);
-        tb.add(btnStep);
-        tb.add(btnStop);
         
         add(tb, BorderLayout.NORTH);
     }
@@ -256,80 +202,70 @@ public class OpenAVRStudio extends JFrame {
         ioPanel.add(p);
     }
 
-    // --- SYNTAX HIGHLIGHTING ---
-    // A simple regex-based highlighter
     private void highlightSyntax() {
         SwingUtilities.invokeLater(() -> {
             try {
                 String text = doc.getText(0, doc.getLength());
                 StyleContext sc = StyleContext.getDefaultStyleContext();
-                
-                // Styles
                 AttributeSet normal = sc.addAttribute(SimpleAttributeSet.EMPTY, StyleConstants.Foreground, new Color(220, 220, 220));
-                AttributeSet opcode = sc.addAttribute(SimpleAttributeSet.EMPTY, StyleConstants.Foreground, new Color(86, 156, 214)); // VS Blue
-                AttributeSet comment = sc.addAttribute(SimpleAttributeSet.EMPTY, StyleConstants.Foreground, new Color(87, 166, 74));  // VS Green
-                AttributeSet directive = sc.addAttribute(SimpleAttributeSet.EMPTY, StyleConstants.Foreground, new Color(197, 134, 192)); // VS Pink
-                AttributeSet register = sc.addAttribute(SimpleAttributeSet.EMPTY, StyleConstants.Foreground, new Color(206, 145, 120)); // VS Orange
-
-                // Reset
+                AttributeSet opcode = sc.addAttribute(SimpleAttributeSet.EMPTY, StyleConstants.Foreground, new Color(86, 156, 214));
+                AttributeSet comment = sc.addAttribute(SimpleAttributeSet.EMPTY, StyleConstants.Foreground, new Color(87, 166, 74));
+                
                 doc.setCharacterAttributes(0, text.length(), normal, true);
-
-                // Regex Patterns
+                
                 Pattern pOpcode = Pattern.compile("\\b(LDI|MOV|ADD|SUB|ANDI|ORI|RJMP|JMP|CALL|RET|SBI|CBI|SWAP|INC|DEC|BREQ|BRNE)\\b", Pattern.CASE_INSENSITIVE);
-                Pattern pReg = Pattern.compile("\\b(R\\d+|PORT[A-D]|DDR[A-D]|PIN[A-D])\\b", Pattern.CASE_INSENSITIVE);
-                Pattern pDir = Pattern.compile("(\\.[A-Z]+|#define|#include)", Pattern.CASE_INSENSITIVE);
                 Pattern pComment = Pattern.compile(";.*");
 
-                // Apply
                 Matcher m = pOpcode.matcher(text);
                 while(m.find()) doc.setCharacterAttributes(m.start(), m.end()-m.start(), opcode, false);
                 
-                m = pReg.matcher(text);
-                while(m.find()) doc.setCharacterAttributes(m.start(), m.end()-m.start(), register, false);
-                
-                m = pDir.matcher(text);
-                while(m.find()) doc.setCharacterAttributes(m.start(), m.end()-m.start(), directive, false);
-                
                 m = pComment.matcher(text);
                 while(m.find()) doc.setCharacterAttributes(m.start(), m.end()-m.start(), comment, false);
-                
             } catch (Exception e) {}
         });
     }
 
-    // --- BUILD & RUN LOGIC ---
+    // --- RUN LOGIC ---
+
+    private void toggleRun() {
+        if (!isRunning) {
+            // Start
+            startBuildAndRun();
+            btnRun.setText("⏹ STOP EXECUTION");
+            btnRun.setBackground(new Color(180, 50, 50));
+        } else {
+            // Stop
+            stopSimulation();
+            btnRun.setText("▶ RUN & EXECUTE");
+            btnRun.setBackground(new Color(0, 120, 60));
+        }
+    }
 
     private void startBuildAndRun() {
-        if (isRunning) return;
-        
         consoleOutput.setText("");
-        log("------ Build started: Project: OpenAVR, Configuration: Debug AVR ------");
+        log(">>> BUILDING...");
         
-        // 1. Process Code (Fix Includes)
-        String raw = codeEditor.getText();
-        String processed = convertToGcc(raw);
-        
+        // 1. Process Code
+        String processed = convertToGcc(codeEditor.getText());
         try {
             File f = new File("main.S");
             FileWriter fw = new FileWriter(f);
             fw.write(processed);
             fw.close();
-        } catch(Exception e) { log("Error writing file: " + e); return; }
+        } catch(Exception e) { log("Disk Error: " + e); return; }
 
         // 2. Compile
         String mcu = deviceCombo.getSelectedItem().toString().toLowerCase();
-        log("Compiling for " + mcu + "...");
         if(!runCmd("avr-gcc", "-mmcu="+mcu, "-nostdlib", "-o", "main.elf", "main.S")) return;
         if(!runCmd("avr-objcopy", "-O", "ihex", "-R", ".eeprom", "main.elf", "main.hex")) return;
         
-        log("Build Succeeded.");
-        log("Loading Simulator...");
+        log(">>> BUILD SUCCESSFUL.");
+        log(">>> STARTING SIMULATION...");
         
         startSimulator("main.hex");
     }
 
     private String convertToGcc(String code) {
-        // Same logic as before: comment .include, fix jmp
         StringBuilder sb = new StringBuilder();
         sb.append("#define __SFR_OFFSET 0\n#include <avr/io.h>\n.global main\nmain:\n");
         for(String line : code.split("\n")) {
@@ -358,11 +294,14 @@ public class OpenAVRStudio extends JFrame {
     private int cycles = 0;
     private int[] flash;
     private int[] registers = new int[32];
-    private int[] io = new int[64]; // IO Map
+    private int[] io = new int[64];
 
     private void startSimulator(String hexFile) {
         flash = loadHex(hexFile);
-        if(flash == null) return;
+        if(flash == null) {
+            log("❌ ERROR: Could not load HEX file.");
+            return;
+        }
         
         // Reset State
         pc = 0;
@@ -371,23 +310,69 @@ public class OpenAVRStudio extends JFrame {
         Arrays.fill(io, 0);
         
         isRunning = true;
-        isPaused = false;
-        
-        btnRun.setEnabled(false);
-        btnStop.setEnabled(true);
-        btnPause.setEnabled(true);
-        btnStep.setEnabled(true);
-        statusLabel.setText(" Debugging...");
 
         simThread = new Thread(() -> {
-            while(isRunning) {
-                if(!isPaused) {
-                    stepSimulation();
-                    try { Thread.sleep(50); } catch(Exception e){} // Slow down for visibility
-                } else {
-                    try { Thread.sleep(100); } catch(Exception e){}
+            log(">>> EXECUTION STARTED");
+            try {
+                while(isRunning) {
+                    if(pc >= flash.length) { 
+                        log(">>> END OF PROGRAM MEMORY REACHED.");
+                        break; 
+                    }
+                    
+                    int opcode = flash[pc];
+                    int nextPc = pc + 1;
+                    boolean changed = false;
+
+                    // --- DECODER ---
+                    // LDI
+                    if ((opcode & 0xF000) == 0xE000) {
+                        int K = ((opcode & 0xF00) >> 4) | (opcode & 0x0F);
+                        int d = ((opcode & 0x00F0) >> 4) + 16;
+                        registers[d] = K;
+                        changed = true;
+                    }
+                    // SBI (Set Bit IO)
+                    else if ((opcode & 0xFF00) == 0x9A00) {
+                        int A = (opcode & 0x00F8) >> 3;
+                        int b = (opcode & 7);
+                        io[A] |= (1 << b);
+                        updateIO(A);
+                    }
+                    // CBI (Clear Bit IO)
+                    else if ((opcode & 0xFF00) == 0x9800) {
+                        int A = (opcode & 0x00F8) >> 3;
+                        int b = (opcode & 7);
+                        io[A] &= ~(1 << b);
+                        updateIO(A);
+                    }
+                    // RJMP
+                    else if ((opcode & 0xF000) == 0xC000) {
+                        int k = opcode & 0x0FFF;
+                        if ((k & 0x800) != 0) k -= 4096;
+                        nextPc = pc + 1 + k;
+                    }
+
+                    pc = nextPc;
+                    cycles++;
+                    
+                    if(changed) updateGUI();
+                    
+                    // Small delay so you can actually SEE the changes
+                    // If you want it instant, remove this. But then LEDs won't "blink", they will just blur.
+                    Thread.sleep(50); 
                 }
+            } catch (Exception e) {
+                log("❌ CRASH: " + e.getMessage());
             }
+            // If loop ends naturally, reset button
+            SwingUtilities.invokeLater(() -> {
+               if (isRunning) { // If it wasn't manual stop
+                   btnRun.setText("▶ RUN & EXECUTE");
+                   btnRun.setBackground(new Color(0, 120, 60));
+                   isRunning = false;
+               }
+            });
         });
         simThread.start();
     }
@@ -395,65 +380,10 @@ public class OpenAVRStudio extends JFrame {
     private void stopSimulation() {
         isRunning = false;
         try { simThread.join(200); } catch(Exception e){}
-        btnRun.setEnabled(true);
-        btnStop.setEnabled(false);
-        btnPause.setEnabled(false);
-        btnStep.setEnabled(false);
-        statusLabel.setText(" Stopped.");
-    }
-
-    private void stepSimulation() {
-        if(pc >= flash.length) { isPaused = true; return; }
-        
-        int opcode = flash[pc];
-        int nextPc = pc + 1;
-        boolean changed = false;
-
-        // --- DECODER (Simplified) ---
-        // LDI
-        if ((opcode & 0xF000) == 0xE000) {
-            int K = ((opcode & 0xF00) >> 4) | (opcode & 0x0F);
-            int d = ((opcode & 0x00F0) >> 4) + 16;
-            registers[d] = K;
-            changed = true;
-        }
-        // MOV
-        else if ((opcode & 0xFC00) == 0x2C00) {
-             int d = (opcode & 0x01F0) >> 4;
-             int r = ((opcode & 0x0200) >> 5) | (opcode & 0x000F);
-             registers[d] = registers[r];
-             changed = true;
-        }
-        // SBI (Set Bit IO)
-        else if ((opcode & 0xFF00) == 0x9A00) {
-            int A = (opcode & 0x00F8) >> 3;
-            int b = (opcode & 7);
-            io[A] |= (1 << b);
-            updateIO(A);
-        }
-        // CBI (Clear Bit IO)
-        else if ((opcode & 0xFF00) == 0x9800) {
-            int A = (opcode & 0x00F8) >> 3;
-            int b = (opcode & 7);
-            io[A] &= ~(1 << b);
-            updateIO(A);
-        }
-        // RJMP
-        else if ((opcode & 0xF000) == 0xC000) {
-            int k = opcode & 0x0FFF;
-            if ((k & 0x800) != 0) k -= 4096;
-            nextPc = pc + 1 + k;
-        }
-
-        pc = nextPc;
-        cycles++;
-        
-        if(changed) updateGUI();
+        log(">>> EXECUTION STOPPED.");
     }
 
     private void updateIO(int addr) {
-        // Map common ATmega32 ports
-        // PORTA=0x1B, PORTB=0x18, PORTC=0x15, PORTD=0x12
         String port = null;
         if(addr == 0x1B) port = "PORTA";
         else if(addr == 0x18) port = "PORTB";
@@ -465,14 +395,15 @@ public class OpenAVRStudio extends JFrame {
             final int val = io[addr];
             SwingUtilities.invokeLater(() -> {
                 JCheckBox[] bits = ioBits.get(pName);
-                for(int i=0; i<8; i++) bits[i].setSelected((val & (1<<i)) != 0);
+                if(bits != null) {
+                    for(int i=0; i<8; i++) bits[i].setSelected((val & (1<<i)) != 0);
+                }
             });
         }
     }
 
     private void updateGUI() {
         SwingUtilities.invokeLater(() -> {
-            // Update Registers
             for(int i=0; i<32; i++) {
                 String hex = String.format("%02X", registers[i]);
                 if(!registerModel.getValueAt(i, 1).equals(hex)) {
@@ -480,14 +411,12 @@ public class OpenAVRStudio extends JFrame {
                     registerModel.setValueAt(registers[i], i, 2);
                 }
             }
-            // Update Counters
             pcLabel.setText(String.format("PC: 0x%04X ", pc*2));
             cycleLabel.setText("Cycles: " + cycles + " ");
         });
     }
 
     private int[] loadHex(String f) {
-        // Same hex loader as before...
         int[] m = new int[32768];
         try(BufferedReader b=new BufferedReader(new FileReader(f))){
             String l;
