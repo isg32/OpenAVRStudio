@@ -13,14 +13,17 @@ import java.util.regex.*;
 
 public class OpenAVRStudio extends JFrame {
 
+    // --- DEVELOPER INFO ---
     private static final String DEV_NAME = "isg32";
     private static final String DEV_GITHUB = "https://github.com/isg32";
     private static final boolean IS_WINDOWS = System.getProperty("os.name").toLowerCase().contains("win");
 
+    // --- CONFIG & STATE ---
     private File currentFile = null;
     private boolean isRunning = false;
     private Thread simThread;
 
+    // --- GUI COMPONENTS ---
     private JTextPane codeEditor; 
     private DefaultStyledDocument doc;
     private JTextArea consoleOutput;
@@ -46,9 +49,11 @@ public class OpenAVRStudio extends JFrame {
         setupMenuBar();
         setupToolbar();
 
+        // --- MAIN LAYOUT ---
         JSplitPane mainSplit = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT);
         mainSplit.setResizeWeight(0.5); 
 
+        // LEFT: CODE EDITOR
         JPanel editorPanel = new JPanel(new BorderLayout());
         doc = new DefaultStyledDocument();
         codeEditor = new JTextPane(doc);
@@ -67,6 +72,7 @@ public class OpenAVRStudio extends JFrame {
             public void changedUpdate(DocumentEvent e) {}
         });
 
+        // Line Numbers
         JTextArea lines = new JTextArea("1");
         lines.setBackground(new Color(50, 50, 50));
         lines.setForeground(Color.GRAY);
@@ -95,6 +101,7 @@ public class OpenAVRStudio extends JFrame {
         editorPanel.add(editorScroll, BorderLayout.CENTER);
         try { doc.insertString(0, getStarterCode(), null); } catch(Exception e){}
         
+        // RIGHT: SIMULATOR & MEMORY
         JPanel rightPanel = new JPanel(new BorderLayout());
         JPanel topSim = new JPanel(new GridLayout(1, 2));
         
@@ -130,6 +137,7 @@ public class OpenAVRStudio extends JFrame {
         mainSplit.setRightComponent(rightPanel);
         add(mainSplit, BorderLayout.CENTER);
 
+        // Status Bar
         JPanel bottomBar = new JPanel(new BorderLayout());
         statusLabel = new JLabel(" New File");
         JPanel counters = new JPanel(new FlowLayout(FlowLayout.RIGHT));
@@ -147,14 +155,16 @@ public class OpenAVRStudio extends JFrame {
         JMenuBar mb = new JMenuBar();
         JMenu f = new JMenu("File");
         JMenuItem openItem = new JMenuItem("Open...");
+        openItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_O, InputEvent.CTRL_DOWN_MASK));
         openItem.addActionListener(e -> openFileAction());
         JMenuItem saveItem = new JMenuItem("Save");
+        saveItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_S, InputEvent.CTRL_DOWN_MASK));
         saveItem.addActionListener(e -> quickSaveAction());
         f.add(openItem); f.add(saveItem);
         
         JMenu h = new JMenu("Help");
         JMenuItem aboutItem = new JMenuItem("About Developer");
-        aboutItem.addActionListener(e -> showAboutDialog());
+        aboutItem.addActionListener(e -> JOptionPane.showMessageDialog(this, "OpenAVR Studio\nDev: " + DEV_NAME + "\n" + DEV_GITHUB));
         h.add(aboutItem);
         
         mb.add(f); mb.add(h);
@@ -169,21 +179,22 @@ public class OpenAVRStudio extends JFrame {
         btnRun = new JButton("▶ RUN & EXECUTE");
         btnRun.setBackground(new Color(0, 120, 60));
         btnRun.setForeground(Color.WHITE);
+        btnRun.setFont(new Font("SansSerif", Font.BOLD, 12));
         btnRun.addActionListener(e -> toggleRun());
         tb.add(new JLabel(" Device: ")); tb.add(deviceCombo);
         tb.add(new JLabel(" Clock: ")); tb.add(freqCombo);
-        tb.add(btnRun);
+        tb.addSeparator(); tb.add(btnRun);
         add(tb, BorderLayout.NORTH);
-    }
-
-    private void showAboutDialog() {
-        JOptionPane.showMessageDialog(this, "OpenAVR Studio\nDev: " + DEV_NAME + "\n" + DEV_GITHUB);
     }
 
     private void setupEditorKeyBindings() {
         codeEditor.getInputMap().put(KeyStroke.getKeyStroke(KeyEvent.VK_Z, InputEvent.CTRL_DOWN_MASK), "Undo");
         codeEditor.getActionMap().put("Undo", new AbstractAction() {
             public void actionPerformed(ActionEvent e) { if(undoManager.canUndo()) undoManager.undo(); }
+        });
+        codeEditor.getInputMap().put(KeyStroke.getKeyStroke(KeyEvent.VK_Y, InputEvent.CTRL_DOWN_MASK), "Redo");
+        codeEditor.getActionMap().put("Redo", new AbstractAction() {
+            public void actionPerformed(ActionEvent e) { if(undoManager.canRedo()) undoManager.redo(); }
         });
     }
 
@@ -209,9 +220,11 @@ public class OpenAVRStudio extends JFrame {
                 AttributeSet opcode = sc.addAttribute(SimpleAttributeSet.EMPTY, StyleConstants.Foreground, new Color(86, 156, 214));
                 AttributeSet comment = sc.addAttribute(SimpleAttributeSet.EMPTY, StyleConstants.Foreground, new Color(87, 166, 74));
                 doc.setCharacterAttributes(0, text.length(), normal, true);
+                
                 Pattern pOpcode = Pattern.compile("\\b(LDI|MOV|ADD|SUB|ANDI|ORI|RJMP|JMP|CALL|RET|SBI|CBI|SWAP|INC|DEC|BREQ|BRNE|OUT|IN)\\b", Pattern.CASE_INSENSITIVE);
                 Matcher m = pOpcode.matcher(text);
                 while(m.find()) doc.setCharacterAttributes(m.start(), m.end()-m.start(), opcode, false);
+                
                 m = Pattern.compile(";.*").matcher(text);
                 while(m.find()) doc.setCharacterAttributes(m.start(), m.end()-m.start(), comment, false);
             } catch (Exception e) {}
@@ -220,12 +233,14 @@ public class OpenAVRStudio extends JFrame {
 
     private void openFileAction() {
         JFileChooser chooser = new JFileChooser(new File("."));
+        chooser.setFileFilter(new FileNameExtensionFilter("AVR Assembly (*.S, *.asm)", "S", "asm"));
         if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
             currentFile = chooser.getSelectedFile();
             try (FileReader fr = new FileReader(currentFile)) {
                 codeEditor.setText("");
                 codeEditor.read(fr, null);
                 statusLabel.setText(" Opened: " + currentFile.getName());
+                undoManager.discardAllEdits();
             } catch (IOException ex) { log("Error: " + ex.getMessage()); }
         }
     }
@@ -233,13 +248,16 @@ public class OpenAVRStudio extends JFrame {
     private void quickSaveAction() {
         if (currentFile == null) {
             JFileChooser chooser = new JFileChooser(new File("."));
-            if (chooser.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) currentFile = chooser.getSelectedFile();
+            if (chooser.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
+                currentFile = chooser.getSelectedFile();
+                if (!currentFile.getName().contains(".")) currentFile = new File(currentFile.getParent(), currentFile.getName()+".S");
+            }
         }
         if (currentFile != null) {
             try (FileWriter fw = new FileWriter(currentFile)) {
                 codeEditor.write(fw);
                 statusLabel.setText(" Saved: " + currentFile.getName());
-            } catch (IOException ex) { log("Error: " + ex.getMessage()); }
+            } catch (IOException ex) { log("Error saving: " + ex.getMessage()); }
         }
     }
 
@@ -259,17 +277,25 @@ public class OpenAVRStudio extends JFrame {
         consoleOutput.setText("");
         log(">>> BUILDING...");
         
+        // 1. Determine executable paths (Bundled vs System)
+        String appPath = System.getProperty("user.dir");
+        String avrPath = appPath + File.separator + "avr-bin" + File.separator + "bin" + File.separator;
+        
+        String gccExec = IS_WINDOWS ? "avr-gcc.exe" : "avr-gcc";
+        String objExec = IS_WINDOWS ? "avr-objcopy.exe" : "avr-objcopy";
+
+        // If bundled folder exists, use it. Otherwise, assume it's in System PATH.
+        String gccPath = new File(avrPath + gccExec).exists() ? avrPath + gccExec : gccExec;
+        String objPath = new File(avrPath + objExec).exists() ? avrPath + objExec : objExec;
+
         try {
             File f = new File("main.S");
             try (FileWriter fw = new FileWriter(f)) { fw.write(convertToGcc(codeEditor.getText())); }
         } catch(Exception e) { log("Disk Error: " + e); return; }
 
         String mcu = deviceCombo.getSelectedItem().toString().toLowerCase();
-        String gcc = IS_WINDOWS ? "avr-gcc.exe" : "avr-gcc";
-        String objcopy = IS_WINDOWS ? "avr-objcopy.exe" : "avr-objcopy";
-
-        if(!runCmd(gcc, "-mmcu="+mcu, "-nostdlib", "-o", "main.elf", "main.S")) return;
-        if(!runCmd(objcopy, "-O", "ihex", "-R", ".eeprom", "main.elf", "main.hex")) return;
+        if(!runCmd(gccPath, "-mmcu="+mcu, "-nostdlib", "-o", "main.elf", "main.S")) return;
+        if(!runCmd(objPath, "-O", "ihex", "-R", ".eeprom", "main.elf", "main.hex")) return;
         
         log(">>> BUILD SUCCESSFUL.");
         startSimulator("main.hex");
@@ -286,45 +312,58 @@ public class OpenAVRStudio extends JFrame {
             String l; while((l=r.readLine())!=null) log(l);
             return p.waitFor() == 0;
         } catch(Exception e) { 
-            log("Error: " + e.getMessage() + "\nMake sure avr-gcc is in your PATH."); 
+            log("Error: " + e.getMessage() + "\nCheck if avr-gcc is installed or bundled."); 
             return false; 
         }
     }
 
-    private void log(String s) { consoleOutput.append(s + "\n"); }
+    private void log(String s) { 
+        consoleOutput.append(s + "\n"); 
+        consoleOutput.setCaretPosition(consoleOutput.getDocument().getLength());
+    }
 
+    // --- SIMULATOR ENGINE ---
     private int pc = 0, cycles = 0;
     private int[] flash, registers = new int[32], io = new int[64];
 
     private void startSimulator(String hexFile) {
         flash = loadHex(hexFile);
-        if(flash == null) return;
+        if(flash == null) { log("❌ ERROR: Could not load HEX."); return; }
         pc = 0; cycles = 0; Arrays.fill(registers, 0); Arrays.fill(io, 0);
         isRunning = true;
         simThread = new Thread(() -> {
+            log(">>> EXECUTION STARTED");
             try {
                 while(isRunning && pc < flash.length) {
                     int opcode = flash[pc];
                     int nextPc = pc + 1;
-                    if ((opcode & 0xF000) == 0xE000) { 
+                    boolean changed = false;
+
+                    if ((opcode & 0xF000) == 0xE000) { // LDI
                         int K = ((opcode & 0xF00) >> 4) | (opcode & 0x0F);
                         registers[((opcode & 0x00F0) >> 4) + 16] = K;
-                    } else if ((opcode & 0xFF00) == 0x9A00) { 
+                        changed = true;
+                    } else if ((opcode & 0xFF00) == 0x9A00) { // SBI
                         int A = (opcode & 0x00F8) >> 3;
                         io[A] |= (1 << (opcode & 7)); updateIO(A);
-                    } else if ((opcode & 0xFF00) == 0x9800) { 
+                    } else if ((opcode & 0xFF00) == 0x9800) { // CBI
                         int A = (opcode & 0x00F8) >> 3;
                         io[A] &= ~(1 << (opcode & 7)); updateIO(A);
-                    } else if ((opcode & 0xF000) == 0xC000) { 
+                    } else if ((opcode & 0xF000) == 0xC000) { // RJMP
                         int k = opcode & 0x0FFF; if ((k & 0x800) != 0) k -= 4096;
                         nextPc = pc + 1 + k;
                     }
+
                     pc = nextPc; cycles++;
-                    updateGUI();
+                    if(changed || cycles % 10 == 0) updateGUI();
                     Thread.sleep(50);
                 }
-            } catch (Exception e) {}
-            isRunning = false;
+            } catch (Exception e) { log("❌ CRASH: " + e.getMessage()); }
+            SwingUtilities.invokeLater(() -> {
+                btnRun.setText("▶ RUN & EXECUTE");
+                btnRun.setBackground(new Color(0, 120, 60));
+                isRunning = false;
+            });
         });
         simThread.start();
     }
@@ -337,7 +376,7 @@ public class OpenAVRStudio extends JFrame {
             int val = io[addr];
             SwingUtilities.invokeLater(() -> {
                 JCheckBox[] bits = ioBits.get(port);
-                for(int i=0; i<8; i++) bits[i].setSelected((val & (1<<i)) != 0);
+                if(bits != null) for(int i=0; i<8; i++) bits[i].setSelected((val & (1<<i)) != 0);
             });
         }
     }
@@ -345,7 +384,12 @@ public class OpenAVRStudio extends JFrame {
     private void updateGUI() {
         SwingUtilities.invokeLater(() -> {
             for(int i=0; i<32; i++) {
-                registerModel.setValueAt(String.format("0x%02X", registers[i]), i, 2);
+                String hex = String.format("0x%02X", registers[i]);
+                if(!registerModel.getValueAt(i, 2).equals(hex)) {
+                    registerModel.setValueAt(String.format("%8s", Integer.toBinaryString(registers[i])).replace(' ', '0'), i, 1);
+                    registerModel.setValueAt(hex, i, 2);
+                    registerModel.setValueAt(String.valueOf(registers[i]), i, 3);
+                }
             }
             pcLabel.setText(String.format("PC: 0x%04X ", pc*2));
             cycleLabel.setText("Cycles: " + cycles + " ");
@@ -371,8 +415,11 @@ public class OpenAVRStudio extends JFrame {
     }
 
     private String getStarterCode() {
-        return "LDI R16, 0xFF\nOUT DDRB, R16\nLOOP:\n  SBI PORTB, 0\n  RJMP LOOP";
+        return "; ATmega32 Blink Demo\nLDI R16, 0xFF\nOUT DDRB, R16\n\nLOOP:\n  SBI PORTB, 0  ; LED ON\n  CBI PORTB, 0  ; LED OFF\n  RJMP LOOP";
     }
 
-    public static void main(String[] args) { SwingUtilities.invokeLater(OpenAVRStudio::new); }
+    public static void main(String[] args) { 
+        try { UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName()); } catch(Exception e){}
+        SwingUtilities.invokeLater(OpenAVRStudio::new); 
+    }
 }
